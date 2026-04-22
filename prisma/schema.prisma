@@ -1,0 +1,26 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model WeighIn {
+  id            String   @id @default(cuid())
+  measuredAt    DateTime
+  weightKg      Float
+  bodyFatPct    Float?
+  muscleMassKg  Float?
+  sourceFile    String?
+  rawText       String?
+  metricsJson   String?  // JSON blob of all extracted Evolt metrics
+  createdAt     DateTime @default(now())
+
+  @@index([measuredAt])
+}
