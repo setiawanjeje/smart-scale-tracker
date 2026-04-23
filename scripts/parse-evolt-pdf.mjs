@@ -17,6 +17,7 @@ const rawText = text ?? "";
 const parsed = parseScalePdfText(rawText);
 
 const metrics = {};
+const segmental = {};
 
 // Header lines (Evolt format)
 const nameAndDate = rawText.match(
@@ -76,6 +77,77 @@ if (tbwAndBfp) {
 // Derived fat mass (kg)
 if (metrics.weightKg != null && metrics.bodyFatPct != null) {
   metrics.bodyFatMassKg = (metrics.weightKg * metrics.bodyFatPct) / 100;
+}
+
+// Segmental analysis (Evolt export tends to include 2 lines for arms/legs and one for torso)
+const armLine = rawText
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .find(
+    (l) =>
+      /^(\d{1,2}(?:[.,]\d{1,2})?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)/i.test(
+        l,
+      ) &&
+      /(\d{1,2}(?:[.,]\d{1,2})?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)/i.test(
+        l,
+      ) &&
+      (l.match(/\b\d+(?:[.,]\d+)?\s*\//g) ?? []).length >= 4,
+  );
+
+if (armLine) {
+  const nums = [...armLine.matchAll(/\b(\d+(?:[.,]\d+)?)\s*\//g)].map((m) =>
+    Number(String(m[1]).replace(",", ".")),
+  );
+  if (nums.length >= 4) {
+    segmental.rightArm = { leanKg: nums[0], fatKg: nums[1] };
+    segmental.leftArm = { leanKg: nums[2], fatKg: nums[3] };
+  }
+}
+
+const legLine = rawText
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .find(
+    (l) =>
+      (l.match(/\b\d+(?:[.,]\d+)?\s*\//g) ?? []).length >= 4 &&
+      [...l.matchAll(/\b(\d+(?:[.,]\d+)?)\s*\//g)]
+        .map((m) => Number(String(m[1]).replace(",", ".")))
+        .some((n) => n >= 5 && n <= 15),
+  );
+
+if (legLine) {
+  const nums = [...legLine.matchAll(/\b(\d+(?:[.,]\d+)?)\s*\//g)].map((m) =>
+    Number(String(m[1]).replace(",", ".")),
+  );
+  if (nums.length >= 4) {
+    segmental.rightLeg = { leanKg: nums[0], fatKg: nums[1] };
+    segmental.leftLeg = { leanKg: nums[2], fatKg: nums[3] };
+  }
+}
+
+// Torso line also includes abdominal circumference and waist-to-hip ratio in your export
+const torsoLine = rawText
+  .split(/\r?\n/)
+  .map((l) => l.trim())
+  .find((l) => /\bcm\b/i.test(l) && /\b0\.\d+\b/.test(l));
+
+if (torsoLine) {
+  const torsoNums = [...torsoLine.matchAll(/\b(\d+(?:[.,]\d+)?)\s*\//g)].map((m) =>
+    Number(String(m[1]).replace(",", ".")),
+  );
+  if (torsoNums.length >= 2) {
+    segmental.torso = { leanKg: torsoNums[0], fatKg: torsoNums[1] };
+  }
+
+  const ab = torsoLine.match(/\b(\d+(?:[.,]\d+)?)\s*cm\b/i);
+  if (ab) metrics.abdominalCircumferenceCm = Number(String(ab[1]).replace(",", "."));
+
+  const whr = torsoLine.match(/\b(0\.\d+)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b/i);
+  if (whr) metrics.waistToHipRatio = Number(String(whr[1]).replace(",", "."));
+}
+
+if (Object.keys(segmental).length) {
+  metrics.segmental = segmental;
 }
 
 // Keep the 5 result-ish lines so we can display everything even if some fields are unmapped.

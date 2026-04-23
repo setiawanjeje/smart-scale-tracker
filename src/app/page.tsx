@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { TrendChart } from "@/components/TrendChart";
 import { UploadSection } from "@/components/UploadSection";
 import Link from "next/link";
+import { MultiMetricChart } from "@/components/MultiMetricChart";
 
 function formatDay(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -23,6 +24,35 @@ async function Dashboard() {
     bodyFatPct: w.bodyFatPct,
     muscleMassKg: w.muscleMassKg,
   }));
+
+  const segmentalData = weighIns.map((w) => {
+    let m: Record<string, unknown> = {};
+    try {
+      m = w.metricsJson ? (JSON.parse(w.metricsJson) as Record<string, unknown>) : {};
+    } catch {
+      m = {};
+    }
+    const seg = (m.segmental ?? {}) as Record<string, unknown>;
+    const part = (k: string) => (seg[k] ?? {}) as Record<string, unknown>;
+
+    const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+    return {
+      measuredAt: formatDay(w.measuredAt),
+      rightArmLeanKg: num(part("rightArm").leanKg),
+      rightArmFatKg: num(part("rightArm").fatKg),
+      leftArmLeanKg: num(part("leftArm").leanKg),
+      leftArmFatKg: num(part("leftArm").fatKg),
+      rightLegLeanKg: num(part("rightLeg").leanKg),
+      rightLegFatKg: num(part("rightLeg").fatKg),
+      leftLegLeanKg: num(part("leftLeg").leanKg),
+      leftLegFatKg: num(part("leftLeg").fatKg),
+      torsoLeanKg: num(part("torso").leanKg),
+      torsoFatKg: num(part("torso").fatKg),
+      abdominalCircumferenceCm: num(m.abdominalCircumferenceCm),
+      waistToHipRatio: num(m.waistToHipRatio),
+    };
+  });
 
   return (
     <div className="flex flex-1 flex-col items-center bg-zinc-50 px-4 py-10 font-sans text-black dark:bg-black dark:text-zinc-50">
@@ -105,6 +135,77 @@ async function Dashboard() {
               Upload a new PDF to populate the full metrics table.
             </div>
           )}
+        </section>
+
+        <section className="rounded-2xl border border-black/10 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-zinc-950">
+          <div className="mb-3 flex items-end justify-between gap-4">
+            <div>
+              <div className="text-sm font-medium">Segmental + measurements</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                Hover any line to see exact values.
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <ChartCard title="Right arm" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "rightArmLeanKg", name: "Lean (kg)" },
+                  { key: "rightArmFatKg", name: "Fat (kg)" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Left arm" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "leftArmLeanKg", name: "Lean (kg)" },
+                  { key: "leftArmFatKg", name: "Fat (kg)" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Right leg" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "rightLegLeanKg", name: "Lean (kg)" },
+                  { key: "rightLegFatKg", name: "Fat (kg)" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Left leg" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "leftLegLeanKg", name: "Lean (kg)" },
+                  { key: "leftLegFatKg", name: "Fat (kg)" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Torso" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "torsoLeanKg", name: "Lean (kg)" },
+                  { key: "torsoFatKg", name: "Fat (kg)" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Abdominal circumference" subtitle="cm" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[{ key: "abdominalCircumferenceCm", name: "cm" }]}
+              />
+            </ChartCard>
+            <ChartCard title="Waist-to-hip ratio" subtitle="ratio" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[{ key: "waistToHipRatio", name: "WHR" }]}
+              />
+            </ChartCard>
+          </div>
         </section>
       </main>
     </div>
