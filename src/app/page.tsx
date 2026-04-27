@@ -8,6 +8,13 @@ function formatDay(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+function formatDayChart(d: Date) {
+  const dd = String(d.getUTCDate()).padStart(2, "0");
+  const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const yy = String(d.getUTCFullYear()).slice(-2);
+  return `${dd}-${mm}-${yy}`;
+}
+
 export default function Home() {
   return <Dashboard />;
 }
@@ -19,7 +26,7 @@ async function Dashboard() {
 
   const latest = weighIns.at(-1) ?? null;
   const data = weighIns.map((w) => ({
-    measuredAt: formatDay(w.measuredAt),
+    measuredAt: formatDayChart(w.measuredAt),
     weightKg: w.weightKg,
     bodyFatPct: w.bodyFatPct,
     muscleMassKg: w.muscleMassKg,
@@ -38,7 +45,7 @@ async function Dashboard() {
     const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
     return {
-      measuredAt: formatDay(w.measuredAt),
+      measuredAt: formatDayChart(w.measuredAt),
       rightArmLeanKg: num(part("rightArm").leanKg),
       rightArmFatKg: num(part("rightArm").fatKg),
       leftArmLeanKg: num(part("leftArm").leanKg),
@@ -95,7 +102,7 @@ async function Dashboard() {
           />
         </section>
 
-        <section className="grid grid-cols-1 gap-4">
+        <section className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <ChartCard title="Weight" subtitle="kg" entries={weighIns.length}>
             {weighIns.length >= 2 ? (
               <TrendChart data={data} series="weightKg" />
@@ -148,21 +155,31 @@ async function Dashboard() {
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <ChartCard title="Right arm" subtitle="kg" entries={weighIns.length}>
-              <MultiMetricChart
-                data={segmentalData}
-                lines={[
-                  { key: "rightArmLeanKg", name: "Lean (kg)" },
-                  { key: "rightArmFatKg", name: "Fat (kg)" },
-                ]}
-              />
-            </ChartCard>
             <ChartCard title="Left arm" subtitle="kg" entries={weighIns.length}>
               <MultiMetricChart
                 data={segmentalData}
                 lines={[
-                  { key: "leftArmLeanKg", name: "Lean (kg)" },
-                  { key: "leftArmFatKg", name: "Fat (kg)" },
+                  { key: "leftArmLeanKg", name: "Lean (kg)", stroke: "#60a5fa" },
+                  { key: "leftArmFatKg", name: "Fat (kg)", stroke: "#facc15" },
+                ]}
+              />
+            </ChartCard>
+            <ChartCard title="Right arm" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "rightArmLeanKg", name: "Lean (kg)", stroke: "#60a5fa" },
+                  { key: "rightArmFatKg", name: "Fat (kg)", stroke: "#facc15" },
+                ]}
+              />
+            </ChartCard>
+ 
+            <ChartCard title="Left leg" subtitle="kg" entries={weighIns.length}>
+              <MultiMetricChart
+                data={segmentalData}
+                lines={[
+                  { key: "leftLegLeanKg", name: "Lean (kg)", stroke: "#60a5fa" },
+                  { key: "leftLegFatKg", name: "Fat (kg)", stroke: "#facc15" },
                 ]}
               />
             </ChartCard>
@@ -170,17 +187,8 @@ async function Dashboard() {
               <MultiMetricChart
                 data={segmentalData}
                 lines={[
-                  { key: "rightLegLeanKg", name: "Lean (kg)" },
-                  { key: "rightLegFatKg", name: "Fat (kg)" },
-                ]}
-              />
-            </ChartCard>
-            <ChartCard title="Left leg" subtitle="kg" entries={weighIns.length}>
-              <MultiMetricChart
-                data={segmentalData}
-                lines={[
-                  { key: "leftLegLeanKg", name: "Lean (kg)" },
-                  { key: "leftLegFatKg", name: "Fat (kg)" },
+                  { key: "rightLegLeanKg", name: "Lean (kg)", stroke: "#60a5fa" },
+                  { key: "rightLegFatKg", name: "Fat (kg)", stroke: "#facc15" },
                 ]}
               />
             </ChartCard>
@@ -188,8 +196,8 @@ async function Dashboard() {
               <MultiMetricChart
                 data={segmentalData}
                 lines={[
-                  { key: "torsoLeanKg", name: "Lean (kg)" },
-                  { key: "torsoFatKg", name: "Fat (kg)" },
+                  { key: "torsoLeanKg", name: "Lean (kg)", stroke: "#60a5fa" },
+                  { key: "torsoFatKg", name: "Fat (kg)", stroke: "#facc15" },
                 ]}
               />
             </ChartCard>

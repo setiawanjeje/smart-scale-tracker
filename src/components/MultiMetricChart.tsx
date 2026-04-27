@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ChartTooltip } from "@/components/ChartTooltip";
 
 export type MultiMetricPoint = { measuredAt: string } & {
   [key: string]: number | null | string;
@@ -19,7 +20,7 @@ export function MultiMetricChart({
   lines,
 }: {
   data: MultiMetricPoint[];
-  lines: { key: string; name: string }[];
+  lines: { key: string; name: string; stroke?: string }[];
 }) {
   return (
     <div className="h-64 w-full min-w-0">
@@ -28,13 +29,14 @@ export function MultiMetricChart({
           <CartesianGrid strokeDasharray="4 4" opacity={0.25} />
           <XAxis dataKey="measuredAt" tickLine={false} axisLine={false} minTickGap={24} />
           <YAxis tickLine={false} axisLine={false} width={44} />
-          <Tooltip />
+          <Tooltip content={<ChartTooltip />} />
           {lines.map((l) => (
             <Line
               key={l.key}
               type="monotone"
               dataKey={l.key}
               name={l.name}
+              stroke={l.stroke}
               strokeWidth={2}
               dot={false}
             />

@@ -9,6 +9,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { ChartTooltip } from "@/components/ChartTooltip";
 
 export type TrendPoint = {
   measuredAt: string;
@@ -49,7 +50,7 @@ export function TrendChart({
             minTickGap={24}
           />
           <YAxis tickLine={false} axisLine={false} width={44} />
-          <Tooltip />
+          <Tooltip content={<ChartTooltip />} />
           <Line
             type="monotone"
             dataKey={s.key}
