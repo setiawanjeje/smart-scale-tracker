@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "../src/generated/prisma/index.js";
+import { PrismaClient } from "@prisma/client";
 
 function getArg(flag) {
   const idx = process.argv.indexOf(flag);
