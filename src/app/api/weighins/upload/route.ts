@@ -1,34 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseScalePdfText } from "@/lib/parseScalePdf";
-import { execFile } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { promises as fs } from "node:fs";
-import os from "node:os";
-import path from "node:path";
-import { promisify } from "node:util";
+import { extractEvoltFromText } from "@/lib/evoltExtract";
+import { PDFParse } from "pdf-parse";
 
 export const runtime = "nodejs";
-
-const execFileAsync = promisify(execFile);
-
-async function extractTextFromPdfViaScript(buf: Buffer) {
-  const tmpPath = path.join(os.tmpdir(), `scale-upload-${randomUUID()}.pdf`);
-  try {
-    await fs.writeFile(tmpPath, buf);
-    const scriptPath = path.join(process.cwd(), "scripts", "parse-evolt-pdf.mjs");
-    const { stdout } = await execFileAsync(process.execPath, [scriptPath, tmpPath], {
-      timeout: 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-    });
-
-    // The script prints the parsed fields as JSON.
-    const parsedFields = JSON.parse(stdout);
-    return parsedFields as unknown;
-  } finally {
-    await fs.unlink(tmpPath).catch(() => {});
-  }
-}
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -49,26 +24,17 @@ export async function POST(req: Request) {
   }
 
   const buf = Buffer.from(await file.arrayBuffer());
-  let rawText = "";
   try {
-    // Use a Node subprocess to parse PDFs (avoids Next.js dev bundler worker issues).
-    const parsedFields = (await extractTextFromPdfViaScript(buf)) as {
-      measuredAt?: string;
-      weightKg?: number;
-      bodyFatPct?: number;
-      muscleMassKg?: number;
-      rawText?: string;
-      metrics?: unknown;
-    };
+    // #region agent log
+    fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'pre-fix',hypothesisId:'H_bundle_missing_dep',location:'src/app/api/weighins/upload/route.ts:beforeParse',message:'upload handler start',data:{hasPdfParse:typeof PDFParse==='function',bufLen:buf.length},timestamp:Date.now()})}).catch(()=>{});
+    console.error("[PDFDBG] upload start", { hasPdfParse: typeof PDFParse === "function", bufLen: buf.length });
+    // #endregion agent log
 
-    rawText = parsedFields.rawText ?? "";
+    const parser = new PDFParse({ data: buf });
+    const { text } = await parser.getText();
+    await parser.destroy();
 
-    const extracted = {
-      measuredAt: parsedFields.measuredAt ? new Date(parsedFields.measuredAt) : undefined,
-      weightKg: parsedFields.weightKg,
-      bodyFatPct: parsedFields.bodyFatPct,
-      muscleMassKg: parsedFields.muscleMassKg,
-    };
+    const extracted = extractEvoltFromText(text ?? "");
 
     if (extracted.weightKg == null) {
       return NextResponse.json(
@@ -77,7 +43,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const measuredAt = extracted.measuredAt ?? new Date();
+    const measuredAt = extracted.measuredAt ? new Date(extracted.measuredAt) : new Date();
     const weighIn = await prisma.weighIn.create({
       data: {
         measuredAt,
@@ -85,13 +51,17 @@ export async function POST(req: Request) {
         bodyFatPct: extracted.bodyFatPct ?? null,
         muscleMassKg: extracted.muscleMassKg ?? null,
         sourceFile: file.name || null,
-        rawText,
-        metricsJson: parsedFields.metrics ? JSON.stringify(parsedFields.metrics) : null,
+        rawText: extracted.rawText,
+        metricsJson: extracted.metrics ? JSON.stringify(extracted.metrics) : null,
       },
     });
 
     return NextResponse.json({ weighIn });
   } catch (err) {
+    // #region agent log
+    fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'pre-fix',hypothesisId:'H_bundle_missing_dep',location:'src/app/api/weighins/upload/route.ts:catch',message:'upload parse failed',data:{name:err instanceof Error?err.name:typeof err,message:err instanceof Error?String(err.message).slice(0,250):String(err).slice(0,250)},timestamp:Date.now()})}).catch(()=>{});
+    console.error("[PDFDBG] upload parse failed", { name: err instanceof Error ? err.name : typeof err, message: err instanceof Error ? err.message : String(err) });
+    // #endregion agent log
     return NextResponse.json(
       {
         error: "Failed to parse PDF.",
