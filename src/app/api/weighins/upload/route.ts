@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractEvoltFromText } from "@/lib/evoltExtract";
+import { createRequire } from "node:module";
+import { pathToFileURL } from "node:url";
 
 export const runtime = "nodejs";
 
@@ -17,6 +19,18 @@ async function extractTextFromPdf(buf: Buffer) {
   if (!g.Path2D) g.Path2D = class Path2D {};
 
   const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+
+  // Ensure worker can be resolved in serverless bundles.
+  // Even with disableWorker=true, pdfjs may attempt a "fake worker" setup.
+  const require = createRequire(import.meta.url);
+  const workerFsPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerFsPath).toString();
+
+  // #region agent log
+  fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'post-fix',hypothesisId:'H_worker_missing',location:'src/app/api/weighins/upload/route.ts:extractTextFromPdf:worker',message:'configured pdfjs worker',data:{workerSrcLen:String(pdfjs.GlobalWorkerOptions.workerSrc??'').length},timestamp:Date.now()})}).catch(()=>{});
+  console.error("[PDFDBG] configured worker", { workerSrcLen: String(pdfjs.GlobalWorkerOptions.workerSrc ?? "").length });
+  // #endregion agent log
+
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buf),
     disableWorker: true,
