@@ -1,9 +1,42 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { extractEvoltFromText } from "@/lib/evoltExtract";
-import { PDFParse } from "pdf-parse";
 
 export const runtime = "nodejs";
+
+async function extractTextFromPdf(buf: Buffer) {
+  // Polyfill minimal DOM APIs that pdfjs-dist may probe for, even for text extraction.
+  // This avoids Vercel runtime crashes like "DOMMatrix is not defined".
+  const g = globalThis as unknown as {
+    DOMMatrix?: unknown;
+    ImageData?: unknown;
+    Path2D?: unknown;
+  };
+  if (!g.DOMMatrix) g.DOMMatrix = class DOMMatrix {};
+  if (!g.ImageData) g.ImageData = class ImageData {};
+  if (!g.Path2D) g.Path2D = class Path2D {};
+
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(buf),
+    disableWorker: true,
+    verbosity: pdfjs.VerbosityLevel.ERRORS,
+  } as never);
+
+  const doc = await loadingTask.promise;
+  let out = "";
+  for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
+    const page = await doc.getPage(pageNum);
+    const content = await page.getTextContent();
+    const pageText = content.items
+      .map((it: unknown) => (it as { str?: string }).str ?? "")
+      .join(" ");
+    out += pageText + "\n";
+    page.cleanup();
+  }
+  await doc.destroy();
+  return out;
+}
 
 export async function POST(req: Request) {
   const form = await req.formData();
@@ -26,13 +59,11 @@ export async function POST(req: Request) {
   const buf = Buffer.from(await file.arrayBuffer());
   try {
     // #region agent log
-    fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'pre-fix',hypothesisId:'H_bundle_missing_dep',location:'src/app/api/weighins/upload/route.ts:beforeParse',message:'upload handler start',data:{hasPdfParse:typeof PDFParse==='function',bufLen:buf.length},timestamp:Date.now()})}).catch(()=>{});
-    console.error("[PDFDBG] upload start", { hasPdfParse: typeof PDFParse === "function", bufLen: buf.length });
+    fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'pre-fix',hypothesisId:'H_bundle_missing_dep',location:'src/app/api/weighins/upload/route.ts:beforeParse',message:'upload handler start',data:{bufLen:buf.length},timestamp:Date.now()})}).catch(()=>{});
+    console.error("[PDFDBG] upload start", { bufLen: buf.length });
     // #endregion agent log
 
-    const parser = new PDFParse({ data: buf });
-    const { text } = await parser.getText();
-    await parser.destroy();
+    const text = await extractTextFromPdf(buf);
 
     const extracted = extractEvoltFromText(text ?? "");
 
