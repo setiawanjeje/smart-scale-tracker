@@ -4,6 +4,8 @@ import { UploadSection } from "@/components/UploadSection";
 import Link from "next/link";
 import { MultiMetricChart } from "@/components/MultiMetricChart";
 
+export const dynamic = "force-dynamic";
+
 function formatDay(d: Date) {
   return d.toISOString().slice(0, 10);
 }

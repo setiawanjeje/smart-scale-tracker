@@ -2,6 +2,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/prisma";
 import { DeleteWeighInButton } from "@/components/DeleteWeighInButton";
 
+export const dynamic = "force-dynamic";
+
 function formatDay(d: Date) {
   return d.toISOString().slice(0, 10);
 }
