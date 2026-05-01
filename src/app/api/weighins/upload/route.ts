@@ -23,12 +23,29 @@ async function extractTextFromPdf(buf: Buffer) {
   // Ensure worker can be resolved in serverless bundles.
   // Even with disableWorker=true, pdfjs may attempt a "fake worker" setup.
   const require = createRequire(import.meta.url);
-  const workerFsPath = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
-  pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerFsPath).toString();
+  const workerResolved = require.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs") as unknown;
+  const resolvedType = typeof workerResolved;
+  const resolvedPreview =
+    resolvedType === "string"
+      ? (workerResolved as string).slice(0, 80)
+      : resolvedType === "number"
+        ? String(workerResolved)
+        : resolvedType;
+
+  // In some bundled environments, require.resolve can return a numeric module id.
+  // If that happens, fall back to a CDN-hosted worker.
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    resolvedType === "string"
+      ? pathToFileURL(workerResolved as string).toString()
+      : "https://unpkg.com/pdfjs-dist@5.4.296/legacy/build/pdf.worker.min.mjs";
 
   // #region agent log
   fetch('http://127.0.0.1:7282/ingest/da2ec3ea-4c3c-4418-91fd-68c85b934dbc',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'351efa'},body:JSON.stringify({sessionId:'351efa',runId:'post-fix',hypothesisId:'H_worker_missing',location:'src/app/api/weighins/upload/route.ts:extractTextFromPdf:worker',message:'configured pdfjs worker',data:{workerSrcLen:String(pdfjs.GlobalWorkerOptions.workerSrc??'').length},timestamp:Date.now()})}).catch(()=>{});
-  console.error("[PDFDBG] configured worker", { workerSrcLen: String(pdfjs.GlobalWorkerOptions.workerSrc ?? "").length });
+  console.error("[PDFDBG] configured worker", {
+    workerSrcLen: String(pdfjs.GlobalWorkerOptions.workerSrc ?? "").length,
+    resolvedType,
+    resolvedPreview,
+  });
   // #endregion agent log
 
   const loadingTask = pdfjs.getDocument({
