@@ -15,12 +15,12 @@ async function extractTextFromPdf(buf: Buffer) {
   if (!g.DOMMatrix) g.DOMMatrix = class DOMMatrix {};
   if (!g.ImageData) g.ImageData = class ImageData {};
   if (!g.Path2D) g.Path2D = class Path2D {};
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.min.mjs");
 
   // IMPORTANT (Vercel): pre-load the worker module so pdfjs can use its in-process
   // WorkerMessageHandler via `globalThis.pdfjsWorker`, without trying to `import(workerSrc)`.
   try {
-    await import("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    await import("pdfjs-dist/legacy/build/pdf.worker.min.mjs");
   } catch {
   }
 
@@ -31,14 +31,78 @@ async function extractTextFromPdf(buf: Buffer) {
   } as never);
 
   const doc = await loadingTask.promise;
+  type TextItem = { str?: string; transform?: number[] };
+
+  const toLines = (items: unknown[]) => {
+    const xs: { x: number; y: number; s: string }[] = [];
+    for (const it of items) {
+      const item = it as TextItem;
+      const s = String(item.str ?? "").trim();
+      const t = Array.isArray(item.transform) ? item.transform : null;
+      if (!s || !t || t.length < 6) continue;
+      const x = Number(t[4]);
+      const y = Number(t[5]);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      xs.push({ x, y, s });
+    }
+
+    // Bucket by Y with a small tolerance to reconstruct rows.
+    const tol = 2.5;
+    const rows: { y: number; cells: { x: number; s: string }[] }[] = [];
+    for (const c of xs) {
+      let row = rows.find((r) => Math.abs(r.y - c.y) <= tol);
+      if (!row) {
+        row = { y: c.y, cells: [] };
+        rows.push(row);
+      }
+      row.cells.push({ x: c.x, s: c.s });
+    }
+
+    // Sort top-to-bottom (higher Y first), and left-to-right within row.
+    rows.sort((a, b) => b.y - a.y);
+    const lines: string[] = [];
+    for (const r of rows) {
+      r.cells.sort((a, b) => a.x - b.x);
+
+      // Avoid extra spaces when PDF splits text into many fragments.
+      let line = "";
+      for (const cell of r.cells) {
+        if (!line) {
+          line = cell.s;
+          continue;
+        }
+        const last = line[line.length - 1] ?? "";
+        const first = cell.s[0] ?? "";
+        const needsSpace =
+          last !== " " &&
+          first !== " " &&
+          last !== "/" &&
+          first !== "/" &&
+          last !== "-" &&
+          first !== "-" &&
+          last !== "(" &&
+          first !== ")" &&
+          last !== "." &&
+          first !== "." &&
+          last !== "," &&
+          first !== "," &&
+          last !== ":" &&
+          first !== ":" &&
+          last !== "%" &&
+          first !== "%";
+        line += (needsSpace ? " " : "") + cell.s;
+      }
+      const trimmed = line.replace(/\s+/g, " ").trim();
+      if (trimmed) lines.push(trimmed);
+    }
+    return lines.join("\n");
+  };
+
   let out = "";
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
     const content = await page.getTextContent();
-    const pageText = content.items
-      .map((it: unknown) => (it as { str?: string }).str ?? "")
-      .join(" ");
-    out += pageText + "\n";
+    out += toLines(content.items as unknown[]) + "\n";
     page.cleanup();
   }
   await doc.destroy();
@@ -91,6 +155,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ weighIn });
   } catch (err) {
+    console.error("[upload] parse failed", err);
     return NextResponse.json(
       {
         error: "Failed to parse PDF.",

@@ -230,7 +230,9 @@ function MetricsTable({ metricsJson }: { metricsJson: string }) {
     metrics = { error: "Failed to decode metricsJson" };
   }
 
-  const entries = Object.entries(metrics).filter(([k]) => k !== "rawResultLines");
+  const entries = Object.entries(metrics).filter(
+    ([k]) => k !== "rawResultLines" && k !== "segmental",
+  );
   const rawLines = Array.isArray(metrics.rawResultLines) ? metrics.rawResultLines : [];
 
   return (

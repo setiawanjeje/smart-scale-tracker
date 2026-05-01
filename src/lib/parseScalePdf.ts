@@ -66,6 +66,23 @@ export function parseScalePdfText(text: string): ParsedWeighIn {
 
   const weight = evoltWeight ?? genericWeight;
 
+  // Prefer the LBM/SMM/VFL row when present (this is where Evolt reports skeletal muscle mass).
+  // Example:
+  // "49.3 / Optimal ... 23.8 / High ... 10 / Over Range"
+  // Some PDFs report VFL as "9 / Balanced" instead of "10 / Over Range".
+  let evoltSmm: string | undefined;
+  {
+    const re =
+      /(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b[\s\S]{0,160}?(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b[\s\S]{0,160}?(\d{1,2})\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b/gi;
+    for (const m of original.matchAll(re)) {
+      const smmCandidate = toNumber(m[2] ?? "");
+      if (smmCandidate == null) continue;
+      if (smmCandidate < 15 || smmCandidate > 70) continue;
+      evoltSmm = m[2] ?? undefined;
+      break;
+    }
+  }
+
   // Evolt often includes a single *line* like: "35.8 / Optimal ... 32.7% / High ..."
   // We intentionally keep this line-scoped so we don't accidentally pair numbers from different rows.
   const lines = original.split(/\r?\n/);
@@ -100,6 +117,7 @@ export function parseScalePdfText(text: string): ParsedWeighIn {
     t.match(/\b(\d{1,2}(?:[.,]\d)?)\s*%\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b/i)?.[1];
 
   const muscleMass =
+    evoltSmm ??
     evoltLineMuscle ??
     t.match(
       /\b(muscle\s*mass|skeletal\s*muscle)\b[^0-9]{0,20}(\d{1,3}(?:[.,]\d)?)\s*kg\b/i,

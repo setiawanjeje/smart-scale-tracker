@@ -15,22 +15,22 @@ export function extractEvoltFromText(rawText: string): EvoltExtractResult {
   const metrics: Record<string, any> = {};
   const segmental: Record<string, any> = {};
 
-  const nameAndDate = rawText.match(
-    /\b(\d{1,2}-\d{1,2}-20\d{2}\s+\d{1,2}:\d{2})\s+([^\r\n]+)\b/,
-  );
-  if (nameAndDate) {
-    const m = nameAndDate[1].match(
-      /(\d{1,2})-(\d{1,2})-(20\d{2})\s+(\d{1,2}):(\d{2})/,
+  // Prefer the last line that looks like: "dd-mm-yyyy HH:MM <name>"
+  // (pdf text order can include multiple date-like occurrences.)
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const m = lines[i].match(
+      /^(\d{1,2})-(\d{1,2})-(20\d{2})\s+(\d{1,2}):(\d{2})\s+(.+)$/,
     );
-    if (m) {
-      const dd = Number(m[1]);
-      const mm = Number(m[2]);
-      const yyyy = Number(m[3]);
-      const hh = Number(m[4]);
-      const min = Number(m[5]);
-      metrics.measuredAt = new Date(Date.UTC(yyyy, mm - 1, dd, hh, min)).toISOString();
-    }
-    metrics.name = nameAndDate[2].trim();
+    if (!m) continue;
+    const dd = Number(m[1]);
+    const mm = Number(m[2]);
+    const yyyy = Number(m[3]);
+    const hh = Number(m[4]);
+    const min = Number(m[5]);
+    metrics.measuredAt = new Date(Date.UTC(yyyy, mm - 1, dd, hh, min)).toISOString();
+    metrics.name = m[6].trim();
+    break;
   }
 
   const demo = rawText.match(
@@ -50,7 +50,7 @@ export function extractEvoltFromText(rawText: string): EvoltExtractResult {
   }
 
   const lbmSmmVfl = rawText.match(
-    /\b(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\s*\[[^\]]+\]\s+(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\s*\[[^\]]+\]\s+(\d{1,2})\s*\/\s*Over Range\b/i,
+    /\b(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\s*\[[^\]]+\]\s+(\d{1,3}(?:[.,]\d)?)\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\s*\[[^\]]+\]\s+(\d{1,2})\s*\/\s*(?:Optimal|High|Under|Balanced|Over Range)\b/i,
   );
   if (lbmSmmVfl) {
     metrics.leanBodyMassKg = Number(String(lbmSmmVfl[1]).replace(",", "."));
