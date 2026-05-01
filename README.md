@@ -1,4 +1,6 @@
-I vibe-coded this using Cursor. This is my personal project to digest my gym's smart scale data and put it in a better UI so I can understand it better (E*olt app sucks bro).
+I vibe-coded this using Cursor. This is my first time to vibe-code so I want to do the least involvement in thinking and coding for this app, and let Cursor carry it.
+
+Also, this is my personal project to digest my gym's smart scale data and put it in a better UI so I can understand it better (E*olt app sucks bro).
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
